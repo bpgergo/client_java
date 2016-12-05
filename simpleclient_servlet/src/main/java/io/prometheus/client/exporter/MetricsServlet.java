@@ -2,18 +2,20 @@ package io.prometheus.client.exporter;
 
 import io.prometheus.client.Collector;
 import io.prometheus.client.CollectorRegistry;
+import io.prometheus.client.exporter.common.ProtobufFormat;
 import io.prometheus.client.exporter.common.TextFormat;
 
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
-import java.util.Collections;
-import java.util.Enumeration;
+import java.io.OutputStream;
+import java.io.PrintWriter;
 import java.io.IOException;
-import java.io.Writer;
+import java.util.logging.Logger;
 
 public class MetricsServlet extends HttpServlet {
+  private static final Logger LOGGER = Logger.getLogger(MetricsServlet.class.getName());
 
   private CollectorRegistry registry;
 
@@ -34,13 +36,25 @@ public class MetricsServlet extends HttpServlet {
   @Override
   protected void doGet(final HttpServletRequest req, final HttpServletResponse resp)
       throws ServletException, IOException {
-    resp.setStatus(HttpServletResponse.SC_OK);
-    resp.setContentType(TextFormat.CONTENT_TYPE_004);
-
-    Writer writer = resp.getWriter();
-    TextFormat.write004(writer, registry.metricFamilySamples());
-    writer.flush();
-    writer.close();
+    String header = req.getHeader("Accept");
+    LOGGER.fine("header accept:" + header);
+    if (header.equals(ProtobufFormat.CONTENT_TYPE_PROTOOBUF)) {
+      resp.setContentType(ProtobufFormat.CONTENT_TYPE_PROTOOBUF);
+      OutputStream out = resp.getOutputStream();
+      Integer length = ProtobufFormat.write(out, this.registry.metricFamilySamples());
+      if (length != null && length > 0){
+        resp.setContentLength(length);
+        LOGGER.fine("content lenght:" + length);
+      }
+      out.flush();
+      out.close();
+    } else {
+      resp.setContentType(TextFormat.CONTENT_TYPE_004);
+      PrintWriter writer = resp.getWriter();
+      TextFormat.write004(writer, this.registry.metricFamilySamples());
+      writer.flush();
+      writer.close();
+    }
   }
 
   @Override
